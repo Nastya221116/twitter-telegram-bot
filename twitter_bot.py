@@ -6,7 +6,7 @@ import requests
 from telegram import Update, Bot
 from telegram.ext import Updater, CommandHandler, CallbackContext
 
-# === Настройки ===
+# === НАСТРОЙКИ ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = int(os.getenv("CHAT_ID"))
 TWITTER_BEARER_TOKEN = os.getenv("TWITTER_BEARER_TOKEN")
@@ -17,7 +17,7 @@ CHECK_INTERVAL = 30  # каждые 30 секунд
 bot = Bot(token=BOT_TOKEN)
 
 
-# === Работа с JSON ===
+# === РАБОТА С ДАННЫМИ ===
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
@@ -30,7 +30,7 @@ def save_data(data):
         json.dump(data, f, indent=2)
 
 
-# === Проверка подключения к Twitter API ===
+# === ПРОВЕРКА ПОДКЛЮЧЕНИЯ К TWITTER API ===
 def test_twitter_api():
     url = "https://api.twitter.com/2/users/by/username/elonmusk"
     headers = {"Authorization": f"Bearer {TWITTER_BEARER_TOKEN}"}
@@ -39,11 +39,11 @@ def test_twitter_api():
         print("✅ Twitter API connection OK")
         return True
     else:
-        print(f"❌ Twitter API error: {resp.status_code} → {resp.text}")
+        print(f"❌ Twitter API error: {resp.status_code} — {resp.text}")
         return False
 
 
-# === Получение последнего твита ===
+# === ПОЛУЧЕНИЕ ПОСЛЕДНЕГО ТВИТА ===
 def get_latest_tweet(user):
     try:
         headers = {"Authorization": f"Bearer {TWITTER_BEARER_TOKEN}"}
@@ -67,7 +67,7 @@ def get_latest_tweet(user):
 
         if "data" in tweets_resp and len(tweets_resp["data"]) > 0:
             tweet = tweets_resp["data"][0]
-            print(f"📥 Получен твит @{user}: {tweet['text'][:60]}...")
+            print(f"📥 Последний твит @{user}: {tweet['text'][:60]}...")
             return tweet
 
         print(f"⏳ У @{user} нет новых твитов")
@@ -78,10 +78,10 @@ def get_latest_tweet(user):
         return None
 
 
-# === Проверка новых твитов ===
+# === ПРОВЕРКА НОВЫХ ТВИТОВ ===
 def check_new_tweets():
     data = load_data()
-    print("✅ Bot started successfully and checking Twitter every 30 seconds...")
+    print("✅ Бот запущен и проверяет Twitter каждые 30 секунд...")
 
     while True:
         for user in data["users"]:
@@ -110,7 +110,7 @@ def check_new_tweets():
         time.sleep(CHECK_INTERVAL)
 
 
-# === Telegram команды ===
+# === TELEGRAM КОМАНДЫ ===
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
         "👋 Привет! Я бот, который присылает новые твиты.\n\n"
@@ -152,7 +152,7 @@ def status(update: Update, context: CallbackContext):
     )
 
 
-# === Основная функция ===
+# === ОСНОВНОЙ ЗАПУСК ===
 def main():
     if not test_twitter_api():
         print("❌ Остановка: Twitter API не отвечает.")
@@ -166,19 +166,12 @@ def main():
     dp.add_handler(CommandHandler("list", list_users))
     dp.add_handler(CommandHandler("status", status))
 
+    # запускаем поток проверки твитов
     threading.Thread(target=check_new_tweets, daemon=True).start()
 
-    PORT = int(os.environ.get("PORT", "10000"))
-    hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-    webhook_url = f"https://{hostname}/{BOT_TOKEN}"
-
-    print(f"🌐 Starting webhook on {webhook_url}")
-    updater.start_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=BOT_TOKEN,
-        webhook_url=webhook_url,
-    )
+    # используем polling, а не webhook (работает в Free-версии)
+    print("🌐 Telegram polling запущен...")
+    updater.start_polling()
     updater.idle()
 
 
