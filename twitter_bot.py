@@ -113,7 +113,7 @@ def main():
     threading.Thread(target=check_new_tweets, daemon=True).start()
 
     # Webhook для Render (никаких конфликтов!)
-    PORT = int(os.environ.get("PORT", "8443"))
+    PORT = int(os.environ.get("PORT", 10000))
     RENDER_URL = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/{BOT_TOKEN}"
 
     print(f"🌐 Starting webhook on {RENDER_URL}")
