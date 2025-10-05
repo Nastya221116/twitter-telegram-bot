@@ -16,16 +16,32 @@ CHECK_INTERVAL = 30  # каждые 30 секунд
 
 bot = Bot(token=BOT_TOKEN)
 
-# === Работа с данными ===
+
+# === Работа с JSON ===
 def load_data():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
             return json.load(f)
     return {"users": [], "last_ids": {}}
 
+
 def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=2)
+
+
+# === Проверка подключения к Twitter API ===
+def test_twitter_api():
+    url = "https://api.twitter.com/2/users/by/username/elonmusk"
+    headers = {"Authorization": f"Bearer {TWITTER_BEARER_TOKEN}"}
+    resp = requests.get(url, headers=headers)
+    if resp.status_code == 200:
+        print("✅ Twitter API connection OK")
+        return True
+    else:
+        print(f"❌ Twitter API error: {resp.status_code} → {resp.text}")
+        return False
+
 
 # === Получение последнего твита ===
 def get_latest_tweet(user):
@@ -51,12 +67,16 @@ def get_latest_tweet(user):
 
         if "data" in tweets_resp and len(tweets_resp["data"]) > 0:
             tweet = tweets_resp["data"][0]
+            print(f"📥 Получен твит @{user}: {tweet['text'][:60]}...")
             return tweet
 
+        print(f"⏳ У @{user} нет новых твитов")
         return None
+
     except Exception as e:
         print(f"❌ Ошибка при получении @{user}: {e}")
         return None
+
 
 # === Проверка новых твитов ===
 def check_new_tweets():
@@ -83,14 +103,14 @@ def check_new_tweets():
                     print(f"📨 Отправлен твит @{user}")
                 except Exception as e:
                     print(f"⚠️ Ошибка отправки сообщения: {e}")
+
                 data["last_ids"][user] = tweet_id
                 save_data(data)
-            else:
-                print(f"⏳ У @{user} нет новых твитов")
 
         time.sleep(CHECK_INTERVAL)
 
-# === Команды Telegram ===
+
+# === Telegram команды ===
 def start(update: Update, context: CallbackContext):
     update.message.reply_text(
         "👋 Привет! Я бот, который присылает новые твиты.\n\n"
@@ -99,6 +119,7 @@ def start(update: Update, context: CallbackContext):
         "/list — список отслеживаемых\n"
         "/status — состояние бота"
     )
+
 
 def add_user(update: Update, context: CallbackContext):
     data = load_data()
@@ -113,6 +134,7 @@ def add_user(update: Update, context: CallbackContext):
     else:
         update.message.reply_text(f"⚠️ @{user} уже добавлен.\n🔗 https://x.com/{user}")
 
+
 def list_users(update: Update, context: CallbackContext):
     data = load_data()
     if not data["users"]:
@@ -121,6 +143,7 @@ def list_users(update: Update, context: CallbackContext):
     users_list = "\n".join([f"@{u} → https://x.com/{u}" for u in data["users"]])
     update.message.reply_text(f"📋 Отслеживаемые пользователи:\n{users_list}")
 
+
 def status(update: Update, context: CallbackContext):
     data = load_data()
     count = len(data["users"])
@@ -128,8 +151,13 @@ def status(update: Update, context: CallbackContext):
         f"🟢 Бот работает.\nПроверяет {count} пользователей каждые {CHECK_INTERVAL} сек."
     )
 
-# === Основная функция (webhook для Render) ===
+
+# === Основная функция ===
 def main():
+    if not test_twitter_api():
+        print("❌ Остановка: Twitter API не отвечает.")
+        return
+
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
@@ -141,16 +169,18 @@ def main():
     threading.Thread(target=check_new_tweets, daemon=True).start()
 
     PORT = int(os.environ.get("PORT", "10000"))
-    RENDER_URL = f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/{BOT_TOKEN}"
+    hostname = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+    webhook_url = f"https://{hostname}/{BOT_TOKEN}"
 
-    print(f"🌐 Starting webhook on {RENDER_URL}")
+    print(f"🌐 Starting webhook on {webhook_url}")
     updater.start_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path=BOT_TOKEN,
-        webhook_url=RENDER_URL,
+        webhook_url=webhook_url,
     )
     updater.idle()
+
 
 if __name__ == "__main__":
     main()
